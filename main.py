@@ -1,4 +1,5 @@
 import multiprocessing
+import pickle
 import time
 
 
@@ -23,7 +24,7 @@ class ProcessController:
     def set_max_proc(self, n):
         self.n = n
 
-    def worker(self, input, output):
+    def worker(self, inp, outp):
         num_proc = 0
         count_proc = self.n
         self.wait_tasks = len(self.tasks)
@@ -52,17 +53,19 @@ class ProcessController:
                     count_proc += 1
                     print(proc[0].name, 'is terminated', round(time.time() - start_tm, 3), 'sec')
 
-            if output.poll():
-                if output.recv() == 'wait_tasks':
+            if outp.poll():
+                op = outp.recv()
+                if op == 'wait_tasks':
                     print(f'Ожидают запуска {self.wait_tasks} задач')
-                    input.send(False)
-                if output.recv() == 'alive_tasks':
+                    inp.send(False)
+                elif op == 'alive_tasks':
                     print(f'Запущено {len(self.processes)} задач')
-                    input.send(False)
+                    inp.send(False)
                 # не принимает список новых заданий
-                # if isinstance(output.recv(), list):
-                #     self.tasks += output.recv()
-                #     input.send(False)
+                elif isinstance(op, list):
+                    self.tasks += op
+                    self.wait_tasks += len(op)
+                    inp.send(False)
 
             if len(self.processes) == 0 and num_proc == len(self.tasks):  # Проверка на выполнение всех задач
                 return False
@@ -70,20 +73,14 @@ class ProcessController:
     def start(self, tasks, max_exec_time):
         if self.n is None:
             raise NoLimitError  # Если не задали ограничение процессов
-        self.max_exec_time = max_exec_time
-        self.output_p, self.input_p = multiprocessing.Pipe()
-        self.tasks = tasks
-        self.main_proc = multiprocessing.Process(target=self.worker, args=(self.input_p, self.output_p))
-        self.main_proc.start()
-        # Не отрабатывает отправка новых заданий
-        # if len(multiprocessing.active_children()) == 0:
-        #     self.max_exec_time = max_exec_time
-        #     self.output_p, self.input_p = multiprocessing.Pipe()
-        #     self.tasks = tasks
-        #     self.main_proc = multiprocessing.Process(target=self.worker, args=(self.input_p, self.output_p))
-        #     self.main_proc.start()
-        # else:
-        #     self.input_p.send(tasks)
+        if len(multiprocessing.active_children()) == 0:
+            self.max_exec_time = max_exec_time
+            self.output_p, self.input_p = multiprocessing.Pipe()
+            self.tasks = tasks
+            self.main_proc = multiprocessing.Process(target=self.worker, args=(self.input_p, self.output_p))
+            self.main_proc.start()
+        else:
+            self.input_p.send(tasks)
 
     def wait(self):
         self.main_proc.join()
@@ -148,7 +145,7 @@ if __name__ == "__main__":
 
     time.sleep(3)
     tasks2 = [(f5, (x, y)), (f6, (x, y)), (f7, (x, y)), (f8, (x, y))]
-    # p.start(tasks2, 6)
+    p.start(tasks2, 4)
     p.wait_count()
     p.alive_count()
 
