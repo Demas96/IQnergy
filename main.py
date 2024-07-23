@@ -60,7 +60,6 @@ class ProcessController:
                 elif op == 'alive_tasks':
                     print(f'Запущено {len(self.processes)} задач')
                     inp.send(False)
-                # не принимает список новых заданий
                 elif isinstance(op, list):
                     self.tasks += op
                     self.wait_tasks += len(op)
